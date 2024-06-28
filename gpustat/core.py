@@ -199,6 +199,23 @@ class GPUStat:
     def processes(self) -> Optional[List[ProcessInfo]]:
         """Get the list of running processes on the GPU."""
         return self.entry['processes']
+    
+    @staticmethod
+    def group_processes(processes):
+        import copy
+        group_by_user = {'cpu_percent': 0., 'gpu_memory_usage': 0., 'cpu_percent': 0., 'cpu_memory_usage': 0.}
+        groups = {}
+        for process in processes:
+            username = process['username']
+            if username not in groups:
+                groups[username] = copy.deepcopy(group_by_user)
+            
+            for k in group_by_user.keys():
+                groups[username][k] += process[k]
+        processes = []
+        for k, v in groups.items():
+            processes.append({"username": k, **v})
+        return processes
 
     def print_to(self, fp, *,
                  with_colors=True,    # deprecated arg
@@ -213,6 +230,7 @@ class GPUStat:
                  gpuname_width=None,
                  eol_char=os.linesep,
                  term=None,
+                 group_by_user=True
                  ):
         if term is None:
             term = Terminal(stream=sys.stdout)
@@ -378,6 +396,8 @@ class GPUStat:
             return r
 
         processes = self.entry['processes']
+        if group_by_user:
+            processes = GPUStat.group_processes(processes)
         full_processes = []
         if processes is None and not no_processes:
             # None (not available)
@@ -656,6 +676,7 @@ class GPUStatCollection(Sequence[GPUStat]):
                         gpuname_width=None, show_header=True,
                         no_processes=False,
                         eol_char=os.linesep,
+                        group_by_user=True
                         ):
         # ANSI color configuration
         if force_color and no_color:
@@ -715,7 +736,8 @@ class GPUStatCollection(Sequence[GPUStat]):
                        show_power=show_power,
                        gpuname_width=gpuname_width,
                        eol_char=eol_char,
-                       term=t_color)
+                       term=t_color,
+                       group_by_user=group_by_user)
             fp.write(eol_char)
 
         if len(self.gpus) == 0:
